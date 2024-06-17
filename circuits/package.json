@@ -3,5 +3,12 @@
   "version": "1.0.0",
   "description": "Circuits for the EU IDs proof of identity",
   "main": "src/index.ts",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "install": "/bin/bash ./scripts/setup.sh install",
+    "build": "/bin/bash ./scripts/setup.sh build"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
 }
