@@ -5,17 +5,27 @@
   "main": "src/index.ts",
   "license": "MIT",
   "scripts": {
-    "install": "/bin/bash ./scripts/setup.sh install",
-    "build": "/bin/bash ./scripts/setup.sh build"
+    "install:circuit": "/bin/bash ./scripts/setup.sh install",
+    "build": "/bin/bash ./scripts/setup.sh build",
+    "test": "npx ts-mocha test/**/*.test.ts --exit"
   },
   "dependencies": {
     "@zk-email/circuits": "^6.1.2",
     "@zk-email/helpers": "^6.1.2",
+    "asn1js": "^3.0.5",
     "circomlib": "^2.0.5",
-    "circomlibjs": "^0.1.7"
+    "circomlibjs": "^0.1.7",
+    "dotenv": "^16.4.5",
+    "mocha": "^10.4.0",
+    "pkijs": "^3.1.0",
+    "pvutils": "^1.1.3",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
   },
   "devDependencies": {
     "@types/circomlibjs": "^0.1.6",
+    "@types/mocha": "^10.0.6",
     "@types/node": "^20.14.2"
   }
 }
