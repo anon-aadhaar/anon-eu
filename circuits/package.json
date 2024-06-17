@@ -10,6 +10,12 @@
   },
   "dependencies": {
     "@zk-email/circuits": "^6.1.2",
-    "circomlib": "^2.0.5"
+    "@zk-email/helpers": "^6.1.2",
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7"
+  },
+  "devDependencies": {
+    "@types/circomlibjs": "^0.1.6",
+    "@types/node": "^20.14.2"
   }
 }
