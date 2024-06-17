@@ -9,6 +9,7 @@
     "build": "/bin/bash ./scripts/setup.sh build"
   },
   "dependencies": {
+    "@zk-email/circuits": "^6.1.2",
     "circomlib": "^2.0.5"
   }
 }
