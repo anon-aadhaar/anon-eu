@@ -1,15 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-// const circom_tester = require("circom_tester/wasm/tester");
+const circom_tester = require("circom_tester/wasm/tester");
 
 import path from "path";
 import { sha256Pad } from "@zk-email/helpers/dist/sha-utils";
 import {
-  bigIntToChunkedBytes,
   bufferToHex,
   Uint8ArrayToCharArray,
 } from "@zk-email/helpers/dist/binary-format";
-import fs from "fs";
 import crypto, { subtle } from "crypto";
 import assert from "assert";
 import {
@@ -18,8 +16,8 @@ import {
   parseSOD,
   splitToWords,
 } from "./util";
-import pkijs, { Certificate } from "pkijs";
-import pvutils, { isEqualBuffer } from "pvutils";
+import { Certificate } from "pkijs";
+import { isEqualBuffer } from "pvutils";
 // import { bytesToIntChunks, padArrayWithZeros, bigIntsToString } from "./util";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("dotenv").config();
@@ -31,71 +29,47 @@ if (typeof process.env.EU_SOD_DATA === "string") {
   throw Error("You must set .env var EU_SOD_DATA when using real data.");
 }
 
-// function prepareTestData() {
-//   const qrDataBytes = convertBigIntToByteArray(BigInt(QRData));
-//   const decodedData = decompressByteArray(qrDataBytes);
+const getSignatureData = async (
+  sodData: string
+): Promise<{
+  signature: Uint8Array;
+  signedData: ArrayBuffer;
+  publicKey: CryptoKey;
+}> => {
+  const signedData = await parseSOD(sodData);
 
-//   const signatureBytes = decodedData.slice(
-//     decodedData.length - 256,
-//     decodedData.length
-//   );
+  if (!signedData.certificates) throw Error("Missing cert in signedData");
+  const signerCert = signedData.certificates[0];
 
-//   const signedData = decodedData.slice(0, decodedData.length - 256);
+  let publicKey: CryptoKey;
+  if (signerCert instanceof Certificate) {
+    publicKey = await getPublicKeyFromSignedData(
+      signerCert.subjectPublicKeyInfo
+    );
+  } else {
+    publicKey = await getPublicKey();
+  }
 
-//   const [qrDataPadded, qrDataPaddedLen] = sha256Pad(signedData, 512 * 3);
+  if (!signedData.signerInfos[0].signedAttrs?.attributes)
+    throw Error("Signed data has no attributes object!");
 
-//   const delimiterIndices: number[] = [];
-//   for (let i = 0; i < qrDataPadded.length; i++) {
-//     if (qrDataPadded[i] === 255) {
-//       delimiterIndices.push(i);
-//     }
-//     if (delimiterIndices.length === 18) {
-//       break;
-//     }
-//   }
+  if (!signedData.encapContentInfo.eContent)
+    throw Error("Signed data has no eContent object!");
 
-//   const signature = BigInt(
-//     "0x" + bufferToHex(Buffer.from(signatureBytes)).toString()
-//   );
+  const signedDataBuffer = signedData.signerInfos[0].signedAttrs.encodedValue;
 
-//   const pkPem = fs.readFileSync(
-//     path.join(__dirname, "../assets", getCertificate(testAadhaar))
-//   );
-//   const pk = crypto.createPublicKey(pkPem);
+  const signatureValue =
+    signedData.signerInfos[0].signature.valueBlock.valueHexView;
 
-//   const pubKey = BigInt(
-//     "0x" +
-//       bufferToHex(
-//         Buffer.from(pk.export({ format: "jwk" }).n as string, "base64url")
-//       )
-//   );
-
-//   const inputs = {
-//     qrDataPadded: Uint8ArrayToCharArray(qrDataPadded),
-//     qrDataPaddedLength: qrDataPaddedLen,
-//     delimiterIndices: delimiterIndices,
-//     signature: splitToWords(signature, BigInt(121), BigInt(17)),
-//     pubKey: splitToWords(pubKey, BigInt(121), BigInt(17)),
-//     nullifierSeed: 12345678,
-//     signalHash: 1001,
-//     revealGender: 0,
-//     revealAgeAbove18: 0,
-//     revealPinCode: 0,
-//     revealState: 0,
-//   };
-
-//   return {
-//     inputs,
-//     qrDataPadded,
-//     signedData,
-//     decodedData,
-//     pubKey,
-//     qrDataPaddedLen,
-//   };
-// }
+  return {
+    signature: signatureValue,
+    signedData: signedDataBuffer,
+    publicKey,
+  };
+};
 
 describe("Verify EU signature", function () {
-  it.only("Verify SOD signature with subtle", async () => {
+  it("Verify SOD signature with subtle", async () => {
     const signedData = await parseSOD(EUSODData);
 
     if (!signedData.certificates) throw Error("Missing cert in signedData");
@@ -103,6 +77,7 @@ describe("Verify EU signature", function () {
 
     let publicKey: CryptoKey;
     if (signerCert instanceof Certificate) {
+      // Extracting the public key stored in the DS ceritificate of the SOD data group
       publicKey = await getPublicKeyFromSignedData(
         signerCert.subjectPublicKeyInfo
       );
@@ -130,11 +105,8 @@ describe("Verify EU signature", function () {
       new Uint8Array(signedData.encapContentInfo.eContent.getValue())
     );
 
-    assert.equal(
-      isEqualBuffer(messageDigest, messageDigestValue),
-      true,
-      "Certificate must be verified successfully"
-    );
+    // Verify that the signed data correspond to the hash of the eContent
+    assert.equal(isEqualBuffer(messageDigest, messageDigestValue), true);
 
     const signedDataBuffer = signedData.signerInfos[0].signedAttrs.encodedValue;
 
@@ -148,34 +120,56 @@ describe("Verify EU signature", function () {
       signedDataBuffer
     );
 
-    assert.equal(isValid, true, "Is signature valid?");
+    assert.equal(isValid, true);
   });
 });
 
-// describe("EUVerifier", function () {
-//   this.timeout(0);
+async function prepareTestData() {
+  const { signature, signedData, publicKey } = await getSignatureData(
+    EUSODData
+  );
 
-//   let circuit: any;
+  const [qrDataPadded, qrDataPaddedLen] = sha256Pad(
+    new Uint8Array(signedData),
+    512
+  );
 
-//   this.beforeAll(async () => {
-//     const pathToCircuit = path.join(
-//       __dirname,
-//       "../src",
-//       "aadhaar-verifier.circom"
-//     );
-//     circuit = await circom_tester(pathToCircuit, {
-//       recompile: true,
-//       // output: path.join(__dirname, '../build'),
-//       include: [
-//         path.join(__dirname, "../node_modules"),
-//         path.join(__dirname, "../../../node_modules"),
-//       ],
-//     });
-//   });
+  const sig = BigInt("0x" + bufferToHex(Buffer.from(signature)).toString());
 
-//   it("should generate witness for circuit with Sha256RSA signature", async () => {
-//     const { inputs } = prepareTestData();
+  const jwk = await crypto.subtle.exportKey("jwk", publicKey);
+  const pubKey = BigInt(
+    "0x" + bufferToHex(Buffer.from(jwk.n as string, "base64url"))
+  );
 
-//     await circuit.calculateWitness(inputs);
-//   });
-// });
+  const inputs = {
+    SODSignedDataDataPadded: Uint8ArrayToCharArray(qrDataPadded),
+    SODSignedDataDataPaddedLength: qrDataPaddedLen,
+    signature: splitToWords(sig, BigInt(121), BigInt(17)),
+    pubKey: splitToWords(pubKey, BigInt(121), BigInt(17)),
+  };
+
+  return {
+    inputs,
+  };
+}
+
+describe("EUVerifier", function () {
+  this.timeout(0);
+
+  let circuit: any;
+
+  this.beforeAll(async () => {
+    const pathToCircuit = path.join(__dirname, "../src", "eu-verifier.circom");
+    circuit = await circom_tester(pathToCircuit, {
+      recompile: true,
+      // output: path.join(__dirname, '../build'),
+      include: [path.join(__dirname, "../node_modules")],
+    });
+  });
+
+  it("should generate witness for circuit with Sha256RSA signature", async () => {
+    const { inputs } = await prepareTestData();
+
+    await circuit.calculateWitness(inputs);
+  });
+});

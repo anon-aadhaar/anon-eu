@@ -7,8 +7,8 @@ import pkijs, {
 import fs from "fs";
 import path from "path";
 import { subtle } from "crypto";
-import pvutils from "pvutils";
-import asn1js from "asn1js";
+import { stringToArrayBuffer } from "pvutils";
+import { fromBER } from "asn1js";
 
 export function splitToWords(
   number: bigint,
@@ -48,15 +48,16 @@ export function pemToDer(pem: string) {
     .replace(/\s/g, ""); // Remove newlines and spaces
 
   const binaryDer = Buffer.from(pemContents, "base64");
-  return pvutils.stringToArrayBuffer(binaryDer.toString("binary"));
+  return stringToArrayBuffer(binaryDer.toString("binary"));
 }
 
+// Will return the CSCA certificate public key
 export async function getPublicKey() {
   const importedPem = fs
-    .readFileSync(path.join(__dirname, "french.pem"))
+    .readFileSync(path.join(__dirname, "..", "assets", "french.pem"))
     .toString();
   const der = pemToDer(importedPem);
-  const asn1 = asn1js.fromBER(der);
+  const asn1 = fromBER(der);
   const certificate = new Certificate({ schema: asn1.result });
 
   const publicKey = await subtle.importKey(

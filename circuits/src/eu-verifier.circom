@@ -3,16 +3,19 @@ pragma circom 2.1.9;
 include "@zk-email/circuits/lib/rsa.circom";
 include "@zk-email/circuits/lib/sha.circom";
 
+// To do:
+// 
+
 template EUVerifier(n, k, maxDataLength) {
-    signal input qrDataPadded[maxDataLength];
-    signal input qrDataPaddedLength;
+    signal input SODSignedDataDataPadded[maxDataLength];
+    signal input SODSignedDataDataPaddedLength;
     signal input signature[k];
     signal input pubKey[k];
 
     // Hash the data and verify RSA signature - 917344 constraints
     component shaHasher = Sha256Bytes(maxDataLength);
-    shaHasher.paddedIn <== qrDataPadded;
-    shaHasher.paddedInLength <== qrDataPaddedLength;
+    shaHasher.paddedIn <== SODSignedDataDataPadded;
+    shaHasher.paddedInLength <== SODSignedDataDataPaddedLength;
     signal sha[256];
     sha <== shaHasher.out;
 
