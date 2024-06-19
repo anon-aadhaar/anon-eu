@@ -71,7 +71,7 @@ export async function getPublicKey() {
   return publicKey;
 }
 
-export async function getPublicKeyFromSignedData(
+export function getPublicKeyFromSignedData(
   publicKeyInfo: PublicKeyInfo
 ): Promise<CryptoKey> {
   const publicKeyInfoBuffer = publicKeyInfo.toSchema().toBER(false);

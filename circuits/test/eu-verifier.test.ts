@@ -9,7 +9,7 @@ import {
   Uint8ArrayToCharArray,
 } from "@zk-email/helpers/dist/binary-format";
 import crypto, { subtle } from "crypto";
-import assert, { throws } from "assert";
+import assert from "assert";
 import {
   getPublicKey,
   getPublicKeyFromSignedData,
@@ -33,17 +33,7 @@ if (typeof process.env.EU_SOD_DATA === "string") {
   throw Error("You must set .env var EU_SOD_DATA when using real data.");
 }
 
-async function convertCryptoKeyToPem(key: CryptoKey) {
-  const jwk = await subtle.exportKey("jwk", key);
-  if (!jwk.n) throw Error("No n found in public key");
-  const spki = `
-  MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA${Buffer.from(jwk.n, "base64")}
-  -----END PUBLIC KEY-----
-    `;
-  return spki;
-}
-
-const getSignatureData = async (
+export const getSignatureData = async (
   sodData: string
 ): Promise<{
   signature: Uint8Array;
@@ -82,37 +72,40 @@ const getSignatureData = async (
   };
 };
 
+// Function to extract the public key from the TBS portion
+function extractPublicKeyFromTBS(tbsCertificate: ArrayBuffer) {
+  const tbsCertAsn1 = AsnParser.parse(tbsCertificate, Certificate);
+  const publicKeyInfo = tbsCertAsn1.subjectPublicKeyInfo;
+
+  const publicKeyBytes = AsnConvert.serialize(publicKeyInfo);
+  return publicKeyBytes;
+}
+
 describe("Verify EU signature", function () {
-  it.only("Extract and verify public key from DS certificate", async () => {
+  it("Extract and verify public key from DS certificate", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
 
     if (!signedData.certificates) throw new Error("Missing cert in signedData");
     const signerCert = signedData.certificates[0];
 
-    // Create an X509Certificate instance for the signer certificate
+    // Create an X509Certificate instance for the DS certificate
     const dsCert = new X509Certificate(signerCert.toSchema().toBER());
-    console.log(dsCert);
 
     // Load the CSCA certificate from file
+    // Publicly available at https://ants.gouv.fr/csca
     const importedPem = fs
       .readFileSync(path.join(__dirname, "..", "assets", "french.pem"))
       .toString();
     const cscaCert = new X509Certificate(importedPem);
 
-    // Extract the public key from the DS certificate
-    const dsPublicKey = dsCert.publicKey;
-    console.log("DS Public Key:", dsPublicKey);
-
     // Extract the signature from the DS certificate
     const dsSignature = dsCert.signature;
-    console.log("DS Signature:", dsSignature);
+    // console.log("DS Signature:", dsSignature);
 
     // Extract the TBS (to-be-signed) portion of the DS certificate
     const asn1Cert = AsnParser.parse(dsCert.rawData, x509Certificate);
     const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
-
-    console.log(tbsCertificate);
 
     const CSCAPublicKey = await cscaCert.publicKey.export();
 
@@ -132,41 +125,11 @@ describe("Verify EU signature", function () {
       );
 
       // The public key from the DS certificate is verified and can be trusted
-      console.log("Verified Public Key from DS Certificate:", dsPublicKey);
+      //   console.log("Verified Public Key from DS Certificate:", dsPublicKey);
     } else {
       console.log("The DS certificate's signature verification failed.");
     }
   });
-  //   it.only("Verify the Document signing certificate", async () => {
-  //     const signedData = await parseSOD(EUSODData);
-
-  //     if (!signedData.certificates) throw Error("Missing cert in signedData");
-  //     const signerCert = signedData.certificates[0];
-
-  //     const cert = new X509Certificate(signerCert.toSchema().toBER());
-
-  //     const importedPem = fs
-  //       .readFileSync(path.join(__dirname, "..", "assets", "french.pem"))
-  //       .toString();
-  //     const CSCACert = new X509Certificate(importedPem);
-
-  //     try {
-  //       const isValid = await cert.verify({
-  //         publicKey: CSCACert.publicKey,
-  //         signatureOnly: true, // Optional: only verifies the signature, not the chain
-  //       });
-
-  //       if (isValid) {
-  //         console.log(
-  //           "DS certificate is verified successfully with the CSCA certificate."
-  //         );
-  //       } else {
-  //         console.log("Verification failed.");
-  //       }
-  //     } catch (error) {
-  //       console.error("Verification failed with error:", error);
-  //     }
-  //   });
 
   it("Verify SOD signature with subtle", async () => {
     const signedData = await parseSOD(EUSODData);
