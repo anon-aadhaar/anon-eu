@@ -109,6 +109,9 @@ describe("Verify EU signature", function () {
 
     const CSCAPublicKey = await cscaCert.publicKey.export();
 
+    console.log(CSCAPublicKey.type);
+    console.log(CSCAPublicKey.algorithm);
+
     const isSignatureValid = await subtle.verify(
       {
         name: "RSASSA-PKCS1-v1_5",

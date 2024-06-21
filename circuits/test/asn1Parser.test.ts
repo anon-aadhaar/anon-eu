@@ -1,13 +1,14 @@
-import { getPublicKey, getPublicKeyFromSignedData, parseSOD } from "./util";
-import { X509Certificate } from "@peculiar/x509";
+import fs from "fs";
+import { getPublicKeyFromSignedData, parseSOD } from "./util";
 import { AsnParser, AsnConvert } from "@peculiar/asn1-schema";
 import { Certificate as x509Certificate } from "@peculiar/asn1-x509";
 import { extractPublicKeyFromTBS, parseASN1 } from "./asn1Parser";
 import { getSignatureData } from "./eu-verifier.test";
-import { Certificate, PublicKeyInfo } from "pkijs";
-import crypto, { subtle } from "crypto";
+import { Certificate } from "pkijs";
+import crypto from "crypto";
 import assert from "assert";
 import { isEqualBuffer } from "pvutils";
+import { Uint8ArrayToCharArray } from "@zk-email/helpers";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("dotenv").config();
 
@@ -49,16 +50,16 @@ describe("Verify EU signature", function () {
       signerCert.toSchema().toBER(),
       x509Certificate
     );
+
     const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
 
     const parsedTBS = parseASN1(new Uint8Array(tbsCertificate));
 
+    // console.log(new Uint8Array(tbsCertificate));
+
     // Extract the public key
     const publicKey = extractPublicKeyFromTBS(parsedTBS);
 
-    assert.equal(
-      isEqualBuffer(publicKey.slice(10, -5), publicKeyFromPKIExtractor),
-      true
-    );
+    assert.equal(isEqualBuffer(publicKey, publicKeyFromPKIExtractor), true);
   });
 });

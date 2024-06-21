@@ -1,59 +1,40 @@
-export type ParsedTBS = { tag: number; length: number; children: any[] };
-
-export function parseASN1(data: Uint8Array) {
-  // Helper function to parse ASN.1 DER-encoded data
-  let index = 0;
-
-  function getLength() {
-    let length = data[index++];
-    if (length & 0x80) {
-      const lengthOfLength = length & 0x7f;
-      length = 0;
-      for (let i = 0; i < lengthOfLength; i++) {
-        length = (length << 8) | data[index++];
-      }
-    }
-    return length;
+function extractPublicKey(bitString: Uint8Array) {
+  bitString = bitString.slice(1);
+  // Check if the bitString starts with the BIT STRING tag (0x30)
+  if (bitString[0] !== 0x30) {
+    throw new Error("Invalid BIT STRING tag");
   }
 
-  function parse(): ParsedTBS {
-    const tag = data[index++];
-    const length = getLength();
-    const end = index + length;
-
-    const children = [];
-    if (tag & 0x20) {
-      // Constructed type
-      while (index < end) {
-        children.push(parse());
-      }
-    } else {
-      // Primitive type
-      children.push(data.subarray(index, end));
-      index = end;
+  // Read length bytes
+  let length;
+  let index = 1;
+  if (bitString[1] & 0x80) {
+    // Long form length
+    const lengthOfLength = bitString[1] & 0x7f;
+    length = 0;
+    for (let i = 0; i < lengthOfLength; i++) {
+      length = (length << 8) | bitString[index + 1 + i];
     }
-
-    return { tag, length, children };
+    index += lengthOfLength + 1;
+  } else {
+    // Short form length
+    length = bitString[1];
+    index += 1;
   }
 
-  return parse();
-}
+  // Skip padding bits (usually one byte)
+  if (bitString[index] !== 0x00) {
+    throw new Error("Expected padding bits");
+  }
+  index += 1;
 
-function printASN1Structure(node: ParsedTBS, indent = 0) {
-  const padding = " ".repeat(indent);
-  console.log(`${padding}Tag: ${node.tag}, Length: ${node.length}`);
-  node.children.forEach((child, idx) => {
-    if (child.tag !== undefined) {
-      printASN1Structure(child, indent + 2);
-    } else {
-      console.log(`${padding}  [Primitive]: ${child}`);
-    }
-  });
+  // The rest is the actual key
+  return bitString.slice(index, index + 256);
 }
 
 export function extractPublicKeyFromTBS(tbs: ParsedTBS) {
   // Debugging: Print the structure of the parsed TBS
-  console.log("Parsed TBS Structure:");
+  // console.log("Parsed TBS Structure:");
   // printASN1Structure(tbs);
 
   // The TBS certificate structure (simplified)
@@ -83,28 +64,111 @@ export function extractPublicKeyFromTBS(tbs: ParsedTBS) {
   const subjectPublicKeyInfo = tbs.children[6];
 
   // Extract the public key bytes from the subjectPublicKeyInfo
-  const subjectPublicKey = subjectPublicKeyInfo.children[1].children[0];
+  const subjectPublicKey = subjectPublicKeyInfo.children[1].children[0].slice(
+    10,
+    -5
+  );
 
   return subjectPublicKey;
 }
 
-// // Sample data: Replace with actual TBS ArrayBuffer
-// const tbsArrayBuffer = new Uint8Array([
-//   0x30, 0x82, 0x03, 0x75, 0xa0, 0x03, 0x02, 0x01, 0x02, 0x02, 0x14, 0x10, 0xda,
-//   0x0e, 0x7d, 0xd2, 0x9d, 0x9d, 0xb0, 0xe9, 0x31, 0xd9, 0x13, 0xf1, 0x8b, 0xee,
-//   0x99, 0xf3, 0x74, 0xc2, 0xcd, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
-//   0xf7, 0x0d, 0x01, 0x01, 0x0b, 0x05, 0x00, 0x30, 0x32, 0x31, 0x0b, 0x30, 0x09,
-//   0x06, 0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x46, 0x52, 0x31, 0x0d, 0x30, 0x0b,
-//   0x06, 0x03, 0x55, 0x04, 0x0a, 0x0c, 0x04, 0x47, 0x6f, 0x75, 0x76, 0x31, 0x14,
-//   0x30, 0x12, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c, 0x0b, 0x43, 0x53, 0x43, 0x41,
-//   0x2d, 0x46, 0x52, 0x41, 0x4e, 0x43, 0x45, 0x30, 0x1e,
-//   // more bytes...
-// ]);
+function createSubarray(
+  data: Uint8Array,
+  start: number,
+  end: number
+): Uint8Array {
+  const result = new Uint8Array(end - start);
+  for (let i = start; i < end; i++) {
+    result[i - start] = data[i];
+  }
+  return result;
+}
 
-// // Parse the TBS
-// const parsedTBS = parseASN1(tbsArrayBuffer);
+function addChild(children: any[], index: number, child: any): number {
+  children[index] = child;
+  return index + 1;
+}
 
-// // Extract the public key
-// const publicKey = extractPublicKeyFromTBS(parsedTBS);
+function readLengthByte(data: Uint8Array, index: number): number[] {
+  return [data[index], index + 1];
+}
 
-// console.log("Extracted Public Key:", publicKey);
+function readMultipleLengthBytes(
+  data: Uint8Array,
+  index: number,
+  lengthOfLength: number
+): number[] {
+  let length = 0;
+  for (let i = 0; i < lengthOfLength; i++) {
+    length = (length << 8) | data[index++];
+  }
+  return [length, index];
+}
+
+function getLength(data: Uint8Array, index: number): number[] {
+  const [lengthByte, newIndex] = readLengthByte(data, index);
+  if (lengthByte & 0x80) {
+    const lengthOfLength = lengthByte & 0x7f;
+    return readMultipleLengthBytes(data, newIndex, lengthOfLength);
+  }
+  return [lengthByte, newIndex];
+}
+
+interface ParsedTBS {
+  tag: number;
+  length: number;
+  children: any[];
+}
+
+function readTag(data: Uint8Array, index: number): number[] {
+  return [data[index], index + 1];
+}
+
+function readPrimitive(data: Uint8Array, index: number, length: number): any[] {
+  const value = createSubarray(data, index, index + length);
+  return [value, index + length];
+}
+
+function parseConstructed(
+  data: Uint8Array,
+  index: number,
+  end: number,
+  children: any[],
+  childIndex: number
+): number[] {
+  while (index < end) {
+    const [parsed, newIndex] = parseASN1Data(data, index);
+    childIndex = addChild(children, childIndex, parsed);
+    index = newIndex;
+  }
+  return [childIndex, index];
+}
+
+export function parseASN1Data(data: Uint8Array, index: number): any[] {
+  const [tag, tagIndex] = readTag(data, index);
+  const [length, lengthIndex] = getLength(data, tagIndex);
+  const end = lengthIndex + length;
+
+  const parsed: ParsedTBS = { tag, length, children: [] };
+  let childIndex = 0;
+
+  if (tag & 0x20) {
+    const [newChildIndex, newIndex] = parseConstructed(
+      data,
+      lengthIndex,
+      end,
+      parsed.children,
+      childIndex
+    );
+    return [parsed, newIndex];
+  } else {
+    const [value, newIndex] = readPrimitive(data, lengthIndex, length);
+    parsed.children[childIndex] = value;
+    return [parsed, newIndex];
+  }
+}
+
+export function parseASN1(data: Uint8Array): ParsedTBS {
+  const [parsed] = parseASN1Data(data, 0);
+  return parsed;
+}
