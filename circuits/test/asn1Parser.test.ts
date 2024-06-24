@@ -2,7 +2,13 @@ import fs from "fs";
 import { getPublicKeyFromSignedData, parseSOD } from "./util";
 import { AsnParser, AsnConvert } from "@peculiar/asn1-schema";
 import { Certificate as x509Certificate } from "@peculiar/asn1-x509";
-import { extractPublicKeyFromTBS, parseASN1 } from "./asn1Parser";
+import {
+  createSubarray,
+  extractPublicKeyFromTBS,
+  findPublicKeyIndex,
+  getPublicKeyIndexFromTBS,
+  parseASN1,
+} from "./asn1Parser";
 import { getSignatureData } from "./eu-verifier.test";
 import { Certificate } from "pkijs";
 import crypto from "crypto";
@@ -55,10 +61,24 @@ describe("Verify EU signature", function () {
 
     const parsedTBS = parseASN1(new Uint8Array(tbsCertificate));
 
+    const index = findPublicKeyIndex(new Uint8Array(tbsCertificate), 0);
+
+    console.log("Index: ", index);
+
+    const pkFromIndex = createSubarray(
+      new Uint8Array(tbsCertificate),
+      index,
+      index + 256
+    );
+
+    console.log("public key from index: ", pkFromIndex);
+
     // console.log(new Uint8Array(tbsCertificate));
 
     // Extract the public key
     const publicKey = extractPublicKeyFromTBS(parsedTBS);
+
+    console.log("public key from extract: ", publicKey);
 
     assert.equal(isEqualBuffer(publicKey, publicKeyFromPKIExtractor), true);
   });

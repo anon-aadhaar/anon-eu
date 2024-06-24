@@ -10,7 +10,8 @@ template EUVerifier(n, k, maxDataLength) {
     signal input SODSignedDataDataPadded[maxDataLength];
     signal input SODSignedDataDataPaddedLength;
     signal input signature[k];
-    signal input pubKey[k];
+    signal input publicKeyIndexInTbs;
+    signal input tbsData;
 
     // Hash the data and verify RSA signature - 917344 constraints
     component shaHasher = Sha256Bytes(maxDataLength);

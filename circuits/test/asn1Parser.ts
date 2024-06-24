@@ -1,36 +1,36 @@
-function extractPublicKey(bitString: Uint8Array) {
-  bitString = bitString.slice(1);
-  // Check if the bitString starts with the BIT STRING tag (0x30)
-  if (bitString[0] !== 0x30) {
-    throw new Error("Invalid BIT STRING tag");
-  }
+// function extractPublicKey(bitString: Uint8Array) {
+//   bitString = bitString.slice(1);
+//   // Check if the bitString starts with the BIT STRING tag (0x30)
+//   if (bitString[0] !== 0x30) {
+//     throw new Error("Invalid BIT STRING tag");
+//   }
 
-  // Read length bytes
-  let length;
-  let index = 1;
-  if (bitString[1] & 0x80) {
-    // Long form length
-    const lengthOfLength = bitString[1] & 0x7f;
-    length = 0;
-    for (let i = 0; i < lengthOfLength; i++) {
-      length = (length << 8) | bitString[index + 1 + i];
-    }
-    index += lengthOfLength + 1;
-  } else {
-    // Short form length
-    length = bitString[1];
-    index += 1;
-  }
+//   // Read length bytes
+//   let length;
+//   let index = 1;
+//   if (bitString[1] & 0x80) {
+//     // Long form length
+//     const lengthOfLength = bitString[1] & 0x7f;
+//     length = 0;
+//     for (let i = 0; i < lengthOfLength; i++) {
+//       length = (length << 8) | bitString[index + 1 + i];
+//     }
+//     index += lengthOfLength + 1;
+//   } else {
+//     // Short form length
+//     length = bitString[1];
+//     index += 1;
+//   }
 
-  // Skip padding bits (usually one byte)
-  if (bitString[index] !== 0x00) {
-    throw new Error("Expected padding bits");
-  }
-  index += 1;
+//   // Skip padding bits (usually one byte)
+//   if (bitString[index] !== 0x00) {
+//     throw new Error("Expected padding bits");
+//   }
+//   index += 1;
 
-  // The rest is the actual key
-  return bitString.slice(index, index + 256);
-}
+//   // The rest is the actual key
+//   return bitString.slice(index, index + 256);
+// }
 
 export function extractPublicKeyFromTBS(tbs: ParsedTBS) {
   // Debugging: Print the structure of the parsed TBS
@@ -63,6 +63,16 @@ export function extractPublicKeyFromTBS(tbs: ParsedTBS) {
   // Find the subjectPublicKeyInfo field in the parsed TBS structure
   const subjectPublicKeyInfo = tbs.children[6];
 
+  //   console.log("Subject public key: ", subjectPublicKeyInfo);
+  //   console.log(
+  //     "Subject public key first child: ",
+  //     subjectPublicKeyInfo.children[1]
+  //   );
+  //   console.log(
+  //     "Subject public key second child: ",
+  //     subjectPublicKeyInfo.children[1].children[0]
+  //   );
+
   // Extract the public key bytes from the subjectPublicKeyInfo
   const subjectPublicKey = subjectPublicKeyInfo.children[1].children[0].slice(
     10,
@@ -72,7 +82,61 @@ export function extractPublicKeyFromTBS(tbs: ParsedTBS) {
   return subjectPublicKey;
 }
 
-function createSubarray(
+export function getPublicKeyIndexFromTBS(data: Uint8Array): number {
+  function parseASN1DataWithCallback(
+    data: Uint8Array,
+    index: number,
+    callback: (index: number) => void
+  ): any[] {
+    const tag = data[index];
+    const tagIndex = index + 1;
+    let [length, lengthIndex] = getLength(data, tagIndex);
+    const end = lengthIndex + length;
+
+    const parsed: ParsedTBS = { tag, length, children: [] };
+    let childIndex = 0;
+
+    if (tag & 0x20) {
+      // Constructed
+      while (lengthIndex < end) {
+        const [parsedChild, newIndex] = parseASN1DataWithCallback(
+          data,
+          lengthIndex,
+          callback
+        );
+        if (childIndex === 6) {
+          // We are at the subjectPublicKeyInfo
+          const subjectPublicKeyInfo = parsedChild.children;
+          if (subjectPublicKeyInfo && subjectPublicKeyInfo.length > 1) {
+            const subjectPublicKey = subjectPublicKeyInfo[1].children;
+            console.log("subjectPublicKey from extractor: ", subjectPublicKey);
+            if (subjectPublicKey && subjectPublicKey.length > 0) {
+              callback(lengthIndex); // Capture the index of the BIT STRING
+            }
+          }
+          return [parsedChild, end];
+        }
+        parsed.children[childIndex++] = parsedChild;
+        lengthIndex = newIndex;
+      }
+    } else {
+      // Primitive
+      const [value, newIndex] = readPrimitive(data, lengthIndex, length);
+      parsed.children[childIndex] = value;
+      return [parsed, newIndex];
+    }
+    return [parsed, end];
+  }
+
+  let publicKeyIndex = -1;
+  parseASN1DataWithCallback(data, 0, (index) => {
+    publicKeyIndex = index + 1; // +1 to move past the BIT STRING tag
+  });
+
+  return publicKeyIndex;
+}
+
+export function createSubarray(
   data: Uint8Array,
   start: number,
   end: number
@@ -89,32 +153,55 @@ function addChild(children: any[], index: number, child: any): number {
   return index + 1;
 }
 
-// function readLengthByte(data: Uint8Array, index: number): number[] {
-//   return [data[index], index + 1];
+// function readMultipleLengthBytes(
+//   data: Uint8Array,
+//   index: number,
+//   lengthOfLength: number
+// ): number[] {
+//   let length = 0;
+//   for (let i = 0; i < lengthOfLength; i++) {
+//     length = (length << 8) | data[index++];
+//   }
+//   return [length, index];
 // }
 
-function readMultipleLengthBytes(
-  data: Uint8Array,
-  index: number,
-  lengthOfLength: number
-): number[] {
-  let length = 0;
-  for (let i = 0; i < lengthOfLength; i++) {
-    length = (length << 8) | data[index++];
-  }
-  return [length, index];
-}
+// function getLength(data: Uint8Array, index: number): number[] {
+//   const lengthByte = data[index];
+//   const newIndex = index + 1;
 
-function getLength(data: Uint8Array, index: number): number[] {
-  //   const [lengthByte, newIndex] = readLengthByte(data, index);
+//   if (lengthByte & 0x80) {
+//     const lengthOfLength = lengthByte & 0x7f;
+//     return readMultipleLengthBytes(data, newIndex, lengthOfLength);
+//   }
+//   return [lengthByte, newIndex];
+// }
+
+// function getLength(data: Uint8Array, index: number): number[] {
+//   const lengthByte = data[index];
+//   const newIndex = index + 1;
+
+//   if (lengthByte & 0x80) {
+//     const lengthOfLength = lengthByte & 0x7f;
+//     let length = 0;
+//     for (let i = 0; i < lengthOfLength; i++) {
+//       length = (length << 8) | data[newIndex + i];
+//     }
+//     return [length, newIndex + lengthOfLength];
+//   }
+//   return [lengthByte, newIndex];
+// }
+
+function getLength(data: Uint8Array, index: number): [number, number] {
   const lengthByte = data[index];
-  const newIndex = index + 1;
-
   if (lengthByte & 0x80) {
     const lengthOfLength = lengthByte & 0x7f;
-    return readMultipleLengthBytes(data, newIndex, lengthOfLength);
+    let length = 0;
+    for (let i = 0; i < lengthOfLength; i++) {
+      length = (length << 8) | data[index + 1 + i];
+    }
+    return [length, index + 1 + lengthOfLength];
   }
-  return [lengthByte, newIndex];
+  return [lengthByte, index + 1];
 }
 
 interface ParsedTBS {
@@ -144,7 +231,6 @@ function parseConstructed(
 }
 
 export function parseASN1Data(data: Uint8Array, index: number): any[] {
-  //   const [tag, tagIndex] = readLengthByte(data, index);
   const tag = data[index];
   const tagIndex = index + 1;
   const [length, lengthIndex] = getLength(data, tagIndex);
@@ -172,4 +258,53 @@ export function parseASN1Data(data: Uint8Array, index: number): any[] {
 export function parseASN1(data: Uint8Array): ParsedTBS {
   const [parsed] = parseASN1Data(data, 0);
   return parsed;
+}
+
+export function findPublicKeyIndex(data: Uint8Array, index: number): number {
+  // Skip over the outer SEQUENCE tag and length
+  const [tbsLength, tbsLengthIndex] = getLength(data, index + 1);
+  let currentIndex = tbsLengthIndex;
+  let childCount = 0;
+
+  // Iterate through the children of the TBS structure
+  while (currentIndex < tbsLengthIndex + tbsLength) {
+    const childTag = data[currentIndex];
+    const [childLength, childLengthIndex] = getLength(data, currentIndex + 1);
+    const childEnd = childLengthIndex + childLength;
+
+    // Check for the 7th child (subjectPublicKeyInfo)
+    if (childCount === 6) {
+      let spkiIndex = childLengthIndex;
+      let spkiChildCount = 0;
+
+      // Iterate through the children of subjectPublicKeyInfo
+      while (spkiIndex < childEnd) {
+        const spkiTag = data[spkiIndex];
+        const [spkiLength, spkiLengthIndex] = getLength(data, spkiIndex + 1);
+        const spkiEnd = spkiLengthIndex + spkiLength;
+
+        // Check for the 2nd child (BIT STRING)
+        if (spkiChildCount === 1) {
+          // Skip BIT STRING tag, length, and unused bits byte
+          const bitStringTagIndex = spkiLengthIndex;
+          const [bitStringLength, bitStringLengthIndex] = getLength(
+            data,
+            bitStringTagIndex + 1
+          );
+          const unusedBitsIndex = bitStringLengthIndex;
+          const publicKeyStartIndex = unusedBitsIndex + 1; // Skip the unused bits byte
+
+          return publicKeyStartIndex;
+        }
+
+        spkiIndex = spkiEnd;
+        spkiChildCount++;
+      }
+    }
+
+    currentIndex = childEnd;
+    childCount++;
+  }
+
+  throw new Error("Public key not found in TBS data.");
 }
