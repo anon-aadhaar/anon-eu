@@ -89,9 +89,9 @@ function addChild(children: any[], index: number, child: any): number {
   return index + 1;
 }
 
-function readLengthByte(data: Uint8Array, index: number): number[] {
-  return [data[index], index + 1];
-}
+// function readLengthByte(data: Uint8Array, index: number): number[] {
+//   return [data[index], index + 1];
+// }
 
 function readMultipleLengthBytes(
   data: Uint8Array,
@@ -106,7 +106,10 @@ function readMultipleLengthBytes(
 }
 
 function getLength(data: Uint8Array, index: number): number[] {
-  const [lengthByte, newIndex] = readLengthByte(data, index);
+  //   const [lengthByte, newIndex] = readLengthByte(data, index);
+  const lengthByte = data[index];
+  const newIndex = index + 1;
+
   if (lengthByte & 0x80) {
     const lengthOfLength = lengthByte & 0x7f;
     return readMultipleLengthBytes(data, newIndex, lengthOfLength);
@@ -118,10 +121,6 @@ interface ParsedTBS {
   tag: number;
   length: number;
   children: any[];
-}
-
-function readTag(data: Uint8Array, index: number): number[] {
-  return [data[index], index + 1];
 }
 
 function readPrimitive(data: Uint8Array, index: number, length: number): any[] {
@@ -145,7 +144,9 @@ function parseConstructed(
 }
 
 export function parseASN1Data(data: Uint8Array, index: number): any[] {
-  const [tag, tagIndex] = readTag(data, index);
+  //   const [tag, tagIndex] = readLengthByte(data, index);
+  const tag = data[index];
+  const tagIndex = index + 1;
   const [length, lengthIndex] = getLength(data, tagIndex);
   const end = lengthIndex + length;
 
