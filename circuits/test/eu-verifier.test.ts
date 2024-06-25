@@ -240,21 +240,26 @@ async function prepareTestData() {
     512
   );
 
-  console.log("Length of tbs bytes: ", new Uint8Array(tbsCertificate).length);
   const [tbsCertificateBytesPadded, tbsCertificateBytesPaddedLength] =
     sha256Pad(new Uint8Array(tbsCertificate), 512 * 2);
 
   const inputs = {
-    // SODSignedDataDataPadded: Uint8ArrayToCharArray(SODDataPadded),
-    // SODSignedDataDataPaddedLength: SODDataPaddedLen,
+    SODSignedDataDataPadded: Uint8ArrayToCharArray(SODDataPadded),
+    SODSignedDataDataPaddedLength: SODDataPaddedLen,
     DSSignature: splitToWords(
       BigInt("0x" + bufferToHex(Buffer.from(dsSignature)).toString()),
       BigInt(121),
       BigInt(34)
     ),
+    SODSignature: splitToWords(
+      BigInt("0x" + bufferToHex(Buffer.from(signature)).toString()),
+      BigInt(121),
+      BigInt(17)
+    ),
     CSCApubKey: splitToWords(CSCApublicKey, BigInt(121), BigInt(34)),
     tbsCertificateBytesPadded: Uint8ArrayToCharArray(tbsCertificateBytesPadded),
     tbsCertificateBytesPaddedLength: tbsCertificateBytesPaddedLength,
+    pkStartIndex: 1,
   };
 
   return {

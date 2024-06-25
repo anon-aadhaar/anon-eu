@@ -1,4 +1,3 @@
-import fs from "fs";
 import { getPublicKeyFromSignedData, parseSOD } from "./util";
 import { AsnParser, AsnConvert } from "@peculiar/asn1-schema";
 import { Certificate as x509Certificate } from "@peculiar/asn1-x509";
@@ -6,7 +5,6 @@ import {
   createSubarray,
   extractPublicKeyFromTBS,
   findPublicKeyIndex,
-  getPublicKeyIndexFromTBS,
   parseASN1,
 } from "./asn1Parser";
 import { getSignatureData } from "./eu-verifier.test";
@@ -14,7 +12,6 @@ import { Certificate } from "pkijs";
 import crypto from "crypto";
 import assert from "assert";
 import { isEqualBuffer } from "pvutils";
-import { Uint8ArrayToCharArray } from "@zk-email/helpers";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("dotenv").config();
 
@@ -42,11 +39,6 @@ describe("Verify EU signature", function () {
       );
       const jwk = await crypto.subtle.exportKey("jwk", publicKey);
       publicKeyFromPKIExtractor = Buffer.from(jwk.n as string, "base64url");
-
-      //   console.log(
-      //     "PublicKey value passed in parser test: ",
-      //     new Uint8Array(publicKeyFromPKIExtractor)
-      //   );
     } else {
       throw Error("signerCert is not a Certificate");
     }
