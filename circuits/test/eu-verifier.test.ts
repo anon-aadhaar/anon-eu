@@ -33,6 +33,46 @@ if (typeof process.env.EU_SOD_DATA === "string") {
   throw Error("You must set .env var EU_SOD_DATA when using real data.");
 }
 
+async function getCSCApublicKey(EUSODData: string) {
+  const signedData = await parseSOD(EUSODData);
+
+  await getSignatureData(EUSODData);
+
+  if (!signedData.certificates) throw new Error("Missing cert in signedData");
+  const signerCert = signedData.certificates[0];
+
+  // Load the CSCA certificate from file
+  // Publicly available at https://ants.gouv.fr/csca
+  const importedPem = fs
+    .readFileSync(path.join(__dirname, "..", "assets", "french.pem"))
+    .toString();
+  const cscaCert = new X509Certificate(importedPem);
+
+  const jwk = await crypto.subtle.exportKey(
+    "jwk",
+    await cscaCert.publicKey.export()
+  );
+  const CSCApublicKey = BigInt(
+    "0x" + bufferToHex(Buffer.from(jwk.n as string, "base64url"))
+  );
+
+  // Extract the TBS (to-be-signed) portion of the DS certificate
+  const asn1Cert = AsnParser.parse(
+    signerCert.toSchema().toBER(),
+    x509Certificate
+  );
+
+  const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
+
+  console.log(Buffer.from(tbsCertificate).length);
+
+  const dsCert = new X509Certificate(signerCert.toSchema().toBER());
+  // Extract the signature from the DS certificate
+  const dsSignature = dsCert.signature;
+
+  return { tbsCertificate, CSCApublicKey, dsSignature };
+}
+
 export const getSignatureData = async (
   sodData: string
 ): Promise<{
@@ -82,7 +122,7 @@ function extractPublicKeyFromTBS(tbsCertificate: ArrayBuffer) {
 }
 
 describe("Verify EU signature", function () {
-  it("Extract and verify public key from DS certificate", async () => {
+  it.only("Extract and verify public key from DS certificate", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
 
@@ -108,9 +148,6 @@ describe("Verify EU signature", function () {
     const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
 
     const CSCAPublicKey = await cscaCert.publicKey.export();
-
-    console.log(CSCAPublicKey.type);
-    console.log(CSCAPublicKey.algorithm);
 
     const isSignatureValid = await subtle.verify(
       {
@@ -194,23 +231,30 @@ async function prepareTestData() {
     EUSODData
   );
 
-  const [qrDataPadded, qrDataPaddedLen] = sha256Pad(
+  const { tbsCertificate, CSCApublicKey, dsSignature } = await getCSCApublicKey(
+    EUSODData
+  );
+
+  const [SODDataPadded, SODDataPaddedLen] = sha256Pad(
     new Uint8Array(signedData),
     512
   );
 
-  const sig = BigInt("0x" + bufferToHex(Buffer.from(signature)).toString());
-
-  const jwk = await crypto.subtle.exportKey("jwk", publicKey);
-  const pubKey = BigInt(
-    "0x" + bufferToHex(Buffer.from(jwk.n as string, "base64url"))
-  );
+  console.log("Length of tbs bytes: ", new Uint8Array(tbsCertificate).length);
+  const [tbsCertificateBytesPadded, tbsCertificateBytesPaddedLength] =
+    sha256Pad(new Uint8Array(tbsCertificate), 512 * 2);
 
   const inputs = {
-    SODSignedDataDataPadded: Uint8ArrayToCharArray(qrDataPadded),
-    SODSignedDataDataPaddedLength: qrDataPaddedLen,
-    signature: splitToWords(sig, BigInt(121), BigInt(17)),
-    pubKey: splitToWords(pubKey, BigInt(121), BigInt(17)),
+    // SODSignedDataDataPadded: Uint8ArrayToCharArray(SODDataPadded),
+    // SODSignedDataDataPaddedLength: SODDataPaddedLen,
+    DSSignature: splitToWords(
+      BigInt("0x" + bufferToHex(Buffer.from(dsSignature)).toString()),
+      BigInt(121),
+      BigInt(34)
+    ),
+    CSCApubKey: splitToWords(CSCApublicKey, BigInt(121), BigInt(34)),
+    tbsCertificateBytesPadded: Uint8ArrayToCharArray(tbsCertificateBytesPadded),
+    tbsCertificateBytesPaddedLength: tbsCertificateBytesPaddedLength,
   };
 
   return {
@@ -232,7 +276,7 @@ describe("EUVerifier", function () {
     });
   });
 
-  it("should generate witness for circuit with Sha256RSA signature", async () => {
+  it.only("should generate witness for circuit with Sha256RSA signature", async () => {
     const { inputs } = await prepareTestData();
 
     await circuit.calculateWitness(inputs);

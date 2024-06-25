@@ -26,7 +26,7 @@ if (typeof process.env.EU_SOD_DATA === "string") {
 }
 
 describe("Verify EU signature", function () {
-  it.only("Extract and verify public key from DS certificate", async () => {
+  it("Extract and verify public key from DS certificate", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
 
@@ -67,11 +67,11 @@ describe("Verify EU signature", function () {
 
     const pkFromIndex = createSubarray(
       new Uint8Array(tbsCertificate),
-      index,
-      index + 256
+      index + 7,
+      index + 256 + 7
     );
 
-    console.log("public key from index: ", pkFromIndex);
+    // console.log("public key from index: ", pkFromIndex);
 
     // console.log(new Uint8Array(tbsCertificate));
 
@@ -80,6 +80,6 @@ describe("Verify EU signature", function () {
 
     console.log("public key from extract: ", publicKey);
 
-    assert.equal(isEqualBuffer(publicKey, publicKeyFromPKIExtractor), true);
+    assert.equal(isEqualBuffer(pkFromIndex, publicKeyFromPKIExtractor), true);
   });
 });

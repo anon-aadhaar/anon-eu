@@ -7,16 +7,17 @@ include "@zk-email/circuits/lib/sha.circom";
 // 
 
 template EUVerifier(n, k, maxDataLength) {
-    signal input SODSignedDataDataPadded[maxDataLength];
-    signal input SODSignedDataDataPaddedLength;
-    signal input signature[k];
-    signal input publicKeyIndexInTbs;
-    signal input tbsData;
+    // signal input SODSignedDataDataPadded[maxDataLength];
+    // signal input SODSignedDataDataPaddedLength;
+    signal input DSSignature[k];
+    signal input CSCApubKey[k];
+    signal input tbsCertificateBytesPadded[maxDataLength];
+    signal input tbsCertificateBytesPaddedLength;
 
-    // Hash the data and verify RSA signature - 917344 constraints
+    // Hash the TBS certificate bytes and verify RSA signature
     component shaHasher = Sha256Bytes(maxDataLength);
-    shaHasher.paddedIn <== SODSignedDataDataPadded;
-    shaHasher.paddedInLength <== SODSignedDataDataPaddedLength;
+    shaHasher.paddedIn <== tbsCertificateBytesPadded;
+    shaHasher.paddedInLength <== tbsCertificateBytesPaddedLength;
     signal sha[256];
     sha <== shaHasher.out;
 
@@ -40,8 +41,8 @@ template EUVerifier(n, k, maxDataLength) {
       rsa.message[i] <== 0;
     }
 
-	rsa.modulus <== pubKey;
-	rsa.signature <== signature;
+	rsa.modulus <== CSCApubKey;
+	rsa.signature <== DSSignature;
 }
 
-component main { public [pubKey] } = EUVerifier(121, 17, 512);
+component main { public [CSCApubKey] } = EUVerifier(121, 34, 512 * 2);
