@@ -61,10 +61,6 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
 
     signal dsPublicKey[256] <== subArraySelector.out;
 
-    log(dsPublicKey[0]);
-    log(dsPublicKey[1]);
-    log(dsPublicKey[2]);
-
     // // Verify the signature of the document
     // // Hash SOD content
     // component sodShaHasher = Sha256Bytes(sodMaxDataLength);

@@ -22,6 +22,7 @@ import { X509Certificate } from "@peculiar/x509";
 import { AsnParser, AsnConvert } from "@peculiar/asn1-schema";
 import { Certificate as x509Certificate } from "@peculiar/asn1-x509";
 import fs from "fs";
+import { findPublicKeyIndex } from "./asn1Parser";
 // import { bytesToIntChunks, padArrayWithZeros, bigIntsToString } from "./util";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("dotenv").config();
@@ -122,7 +123,7 @@ function extractPublicKeyFromTBS(tbsCertificate: ArrayBuffer) {
 }
 
 describe("Verify EU signature", function () {
-  it.only("Extract and verify public key from DS certificate", async () => {
+  it("Extract and verify public key from DS certificate", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
 
@@ -243,6 +244,8 @@ async function prepareTestData() {
   const [tbsCertificateBytesPadded, tbsCertificateBytesPaddedLength] =
     sha256Pad(new Uint8Array(tbsCertificate), 512 * 2);
 
+  const index = findPublicKeyIndex(new Uint8Array(tbsCertificate), 0);
+
   const inputs = {
     SODSignedDataDataPadded: Uint8ArrayToCharArray(SODDataPadded),
     SODSignedDataDataPaddedLength: SODDataPaddedLen,
@@ -259,7 +262,7 @@ async function prepareTestData() {
     CSCApubKey: splitToWords(CSCApublicKey, BigInt(121), BigInt(34)),
     tbsCertificateBytesPadded: Uint8ArrayToCharArray(tbsCertificateBytesPadded),
     tbsCertificateBytesPaddedLength: tbsCertificateBytesPaddedLength,
-    pkStartIndex: 1,
+    pkStartIndex: index + 7,
   };
 
   return {
@@ -281,7 +284,7 @@ describe("EUVerifier", function () {
     });
   });
 
-  it.only("should generate witness for circuit with Sha256RSA signature", async () => {
+  it("should generate witness for circuit with Sha256RSA signature", async () => {
     const { inputs } = await prepareTestData();
 
     await circuit.calculateWitness(inputs);

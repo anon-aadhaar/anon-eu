@@ -51,7 +51,7 @@ describe("Verify EU signature", function () {
 
     const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
 
-    const parsedTBS = parseASN1(new Uint8Array(tbsCertificate));
+    // const parsedTBS = parseASN1(new Uint8Array(tbsCertificate));
 
     const index = findPublicKeyIndex(new Uint8Array(tbsCertificate), 0);
 
@@ -62,15 +62,6 @@ describe("Verify EU signature", function () {
       index + 7,
       index + 256 + 7
     );
-
-    // console.log("public key from index: ", pkFromIndex);
-
-    // console.log(new Uint8Array(tbsCertificate));
-
-    // Extract the public key
-    const publicKey = extractPublicKeyFromTBS(parsedTBS);
-
-    console.log("public key from extract: ", publicKey);
 
     assert.equal(isEqualBuffer(pkFromIndex, publicKeyFromPKIExtractor), true);
   });
