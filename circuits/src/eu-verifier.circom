@@ -3,6 +3,7 @@ pragma circom 2.1.9;
 include "@zk-email/circuits/lib/rsa.circom";
 include "@zk-email/circuits/lib/sha.circom";
 include "@zk-email/circuits/utils/array.circom";
+include "./asn1-parser.circom";
 
 // To do:
 // 
@@ -59,39 +60,43 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
     subArraySelector.startIndex <== pkStartIndex;
     subArraySelector.length <== 256;
 
-    signal dsPublicKey[256] <== subArraySelector.out;
+    // Turn modulus into words array
+    component modulusBytesToWords = ByteArrayToWordArray(256, sod_n, sod_k);
+    modulusBytesToWords.in <== subArraySelector.out;
 
-    // // Verify the signature of the document
-    // // Hash SOD content
-    // component sodShaHasher = Sha256Bytes(sodMaxDataLength);
-    // sodShaHasher.paddedIn <== SODSignedDataDataPadded;
-    // sodShaHasher.paddedInLength <== SODSignedDataDataPaddedLength;
-    // signal sodSha[256];
-    // sodSha <== sodShaHasher.out;
+    signal dsPublicKey[sod_k] <== modulusBytesToWords.out;
 
-    // // Verify RSA signature of the SOD
-    // component sodRsa = RSAVerifier65537(sod_n, sod_k);
-    // var sodRsaMsgLength = (256 + sod_n) \ sod_n;
-    // component sodRsaBaseMsg[sodRsaMsgLength];
-    // for (var i = 0; i < sodRsaMsgLength; i++) {
-    //   sodRsaBaseMsg[i] = Bits2Num(sod_n);
-    // }
-    // for (var i = 0; i < 256; i++) {
-    //   sodRsaBaseMsg[i \ sod_n].in[i % sod_n] <== sodSha[255 - i];
-    // }
-    // for (var i = 256; i < sod_n * sodRsaMsgLength; i++) {
-    //   sodRsaBaseMsg[i \ sod_n].in[i % sod_n] <== 0;
-    // }
+    // Verify the signature of the document
+    // Hash SOD content
+    component sodShaHasher = Sha256Bytes(sodMaxDataLength);
+    sodShaHasher.paddedIn <== SODSignedDataDataPadded;
+    sodShaHasher.paddedInLength <== SODSignedDataDataPaddedLength;
+    signal sodSha[256];
+    sodSha <== sodShaHasher.out;
 
-    // for (var i = 0; i < sodRsaMsgLength; i++) {
-    //   sodRsa.message[i] <== sodRsaBaseMsg[i].out;
-    // }
-    // for (var i = sodRsaMsgLength; i < sod_k; i++) {
-    //   sodRsa.message[i] <== 0;
-    // }
+    // Verify RSA signature of the SOD
+    component sodRsa = RSAVerifier65537(sod_n, sod_k);
+    var sodRsaMsgLength = (256 + sod_n) \ sod_n;
+    component sodRsaBaseMsg[sodRsaMsgLength];
+    for (var i = 0; i < sodRsaMsgLength; i++) {
+      sodRsaBaseMsg[i] = Bits2Num(sod_n);
+    }
+    for (var i = 0; i < 256; i++) {
+      sodRsaBaseMsg[i \ sod_n].in[i % sod_n] <== sodSha[255 - i];
+    }
+    for (var i = 256; i < sod_n * sodRsaMsgLength; i++) {
+      sodRsaBaseMsg[i \ sod_n].in[i % sod_n] <== 0;
+    }
 
-	// sodRsa.modulus <== dsPublicKey;
-	// sodRsa.signature <== DSSignature;
+    for (var i = 0; i < sodRsaMsgLength; i++) {
+      sodRsa.message[i] <== sodRsaBaseMsg[i].out;
+    }
+    for (var i = sodRsaMsgLength; i < sod_k; i++) {
+      sodRsa.message[i] <== 0;
+    }
+
+	sodRsa.modulus <== dsPublicKey;
+	sodRsa.signature <== SODSignature;
 }
 
 component main { public [CSCApubKey] } = EUVerifier(121, 17, 121, 34, 512, 512 * 2);
