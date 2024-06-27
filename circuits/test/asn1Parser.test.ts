@@ -51,11 +51,7 @@ describe("Verify EU signature", function () {
 
     const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
 
-    // const parsedTBS = parseASN1(new Uint8Array(tbsCertificate));
-
     const index = findPublicKeyIndex(new Uint8Array(tbsCertificate), 0);
-
-    console.log("Index: ", index);
 
     const pkFromIndex = createSubarray(
       new Uint8Array(tbsCertificate),

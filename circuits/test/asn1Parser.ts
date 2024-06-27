@@ -109,7 +109,6 @@ export function getPublicKeyIndexFromTBS(data: Uint8Array): number {
           const subjectPublicKeyInfo = parsedChild.children;
           if (subjectPublicKeyInfo && subjectPublicKeyInfo.length > 1) {
             const subjectPublicKey = subjectPublicKeyInfo[1].children;
-            console.log("subjectPublicKey from extractor: ", subjectPublicKey);
             if (subjectPublicKey && subjectPublicKey.length > 0) {
               callback(lengthIndex); // Capture the index of the BIT STRING
             }

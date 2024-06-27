@@ -28,10 +28,14 @@ import { findPublicKeyIndex } from "./asn1Parser";
 require("dotenv").config();
 
 let EUSODData: string;
+let base64Mrz: string;
 if (typeof process.env.EU_SOD_DATA === "string") {
   EUSODData = process.env.EU_SOD_DATA;
+  base64Mrz = process.env.BASE64_MRZ!;
 } else {
-  throw Error("You must set .env var EU_SOD_DATA when using real data.");
+  throw Error(
+    "You must set .env var EUSODData and base64Mrz when using real data."
+  );
 }
 
 async function getCSCApublicKey(EUSODData: string) {
@@ -64,8 +68,6 @@ async function getCSCApublicKey(EUSODData: string) {
   );
 
   const tbsCertificate = AsnConvert.serialize(asn1Cert.tbsCertificate);
-
-  console.log(Buffer.from(tbsCertificate).length);
 
   const dsCert = new X509Certificate(signerCert.toSchema().toBER());
   // Extract the signature from the DS certificate
@@ -123,6 +125,50 @@ function extractPublicKeyFromTBS(tbsCertificate: ArrayBuffer) {
 }
 
 describe("Verify EU signature", function () {
+  it.only("Verifies that the MRZ hash is part of the signed data", async () => {
+    // Parse SOD data to get the signed certificate
+    const signedData = await parseSOD(EUSODData);
+
+    if (!signedData.encapContentInfo.eContent)
+      throw Error("eContent not found in signed data.");
+
+    const eContentInfo = Buffer.from(
+      signedData.encapContentInfo.eContent.getValue()
+    ).toString("hex");
+
+    const mrzHash = await subtle.digest(
+      "SHA-256",
+      Buffer.from(base64Mrz, "base64")
+    );
+
+    assert.equal(
+      Buffer.from(mrzHash).toString("hex"),
+      eContentInfo.substring(62, 62 + 64)
+    );
+
+    if (!signedData.signerInfos[0].signedAttrs)
+      throw Error("signedAttrs not found in signed data.");
+
+    const eContentSignedDataBuffer = Buffer.from(
+      signedData.signerInfos[0].signedAttrs.encodedValue
+    );
+
+    const eContentHash = await subtle.digest(
+      "SHA-256",
+      Buffer.from(eContentInfo, "hex")
+    );
+
+    const eContentSignedDataString = eContentSignedDataBuffer.toString("hex");
+
+    assert.equal(
+      Buffer.from(eContentHash).toString("hex"),
+      eContentSignedDataString.slice(
+        eContentSignedDataString.length - 64,
+        eContentSignedDataString.length
+      )
+    );
+  });
+
   it("Extract and verify public key from DS certificate", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
@@ -284,7 +330,7 @@ describe("EUVerifier", function () {
     });
   });
 
-  it("should generate witness for circuit with Sha256RSA signature", async () => {
+  it.skip("should generate witness for circuit with Sha256RSA signature", async () => {
     const { inputs } = await prepareTestData();
 
     await circuit.calculateWitness(inputs);

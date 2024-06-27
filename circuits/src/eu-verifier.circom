@@ -3,10 +3,7 @@ pragma circom 2.1.9;
 include "@zk-email/circuits/lib/rsa.circom";
 include "@zk-email/circuits/lib/sha.circom";
 include "@zk-email/circuits/utils/array.circom";
-include "./asn1-parser.circom";
-
-// To do:
-// 
+include "./helpers.circom";
 
 template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLength) {
     // Signature of the document signer certificate
