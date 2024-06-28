@@ -1,37 +1,3 @@
-// function extractPublicKey(bitString: Uint8Array) {
-//   bitString = bitString.slice(1);
-//   // Check if the bitString starts with the BIT STRING tag (0x30)
-//   if (bitString[0] !== 0x30) {
-//     throw new Error("Invalid BIT STRING tag");
-//   }
-
-//   // Read length bytes
-//   let length;
-//   let index = 1;
-//   if (bitString[1] & 0x80) {
-//     // Long form length
-//     const lengthOfLength = bitString[1] & 0x7f;
-//     length = 0;
-//     for (let i = 0; i < lengthOfLength; i++) {
-//       length = (length << 8) | bitString[index + 1 + i];
-//     }
-//     index += lengthOfLength + 1;
-//   } else {
-//     // Short form length
-//     length = bitString[1];
-//     index += 1;
-//   }
-
-//   // Skip padding bits (usually one byte)
-//   if (bitString[index] !== 0x00) {
-//     throw new Error("Expected padding bits");
-//   }
-//   index += 1;
-
-//   // The rest is the actual key
-//   return bitString.slice(index, index + 256);
-// }
-
 export function extractPublicKeyFromTBS(tbs: ParsedTBS) {
   // Debugging: Print the structure of the parsed TBS
   // console.log("Parsed TBS Structure:");
@@ -151,44 +117,6 @@ function addChild(children: any[], index: number, child: any): number {
   children[index] = child;
   return index + 1;
 }
-
-// function readMultipleLengthBytes(
-//   data: Uint8Array,
-//   index: number,
-//   lengthOfLength: number
-// ): number[] {
-//   let length = 0;
-//   for (let i = 0; i < lengthOfLength; i++) {
-//     length = (length << 8) | data[index++];
-//   }
-//   return [length, index];
-// }
-
-// function getLength(data: Uint8Array, index: number): number[] {
-//   const lengthByte = data[index];
-//   const newIndex = index + 1;
-
-//   if (lengthByte & 0x80) {
-//     const lengthOfLength = lengthByte & 0x7f;
-//     return readMultipleLengthBytes(data, newIndex, lengthOfLength);
-//   }
-//   return [lengthByte, newIndex];
-// }
-
-// function getLength(data: Uint8Array, index: number): number[] {
-//   const lengthByte = data[index];
-//   const newIndex = index + 1;
-
-//   if (lengthByte & 0x80) {
-//     const lengthOfLength = lengthByte & 0x7f;
-//     let length = 0;
-//     for (let i = 0; i < lengthOfLength; i++) {
-//       length = (length << 8) | data[newIndex + i];
-//     }
-//     return [length, newIndex + lengthOfLength];
-//   }
-//   return [lengthByte, newIndex];
-// }
 
 function getLength(data: Uint8Array, index: number): [number, number] {
   const lengthByte = data[index];

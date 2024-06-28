@@ -3,6 +3,7 @@ pragma circom 2.1.9;
 include "circomlib/circuits/bitify.circom";
 include "circomlib/circuits/sha256/sha256.circom";
 
+// Helpers from proof-of-passport
 template ByteArrayToWordArray (l,n,k) {
     signal input in[l];
     signal output out[k];

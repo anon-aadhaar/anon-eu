@@ -111,6 +111,8 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
       }
   }
 
+  // To do: get the length of the actual data to retrieve the last 32 bytes 
+  // where the hash of the eContentInfo is stored
   var startIndex = 152 - 32; 
   for (var i = 0; i < 32; i++) {
     SODSignedDataPadded[startIndex + i] === eContentHashBytes[i].out;
