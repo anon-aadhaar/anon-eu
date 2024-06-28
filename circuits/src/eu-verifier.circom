@@ -14,12 +14,13 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
     signal input tbsCertificateBytesPadded[tbsMaxDataLength];
     signal input tbsCertificateBytesPaddedLength;
     // Document data signed by the DS public key
-    signal input SODSignedDataDataPadded[sodMaxDataLength];
-    signal input SODSignedDataDataPaddedLength;
+    signal input SODSignedDataPadded[sodMaxDataLength];
+    signal input SODSignedDataPaddedLength;
     // SOD signature
     signal input SODSignature[sod_k];
     // Start index of the DS public key in the TBS data
     signal input pkStartIndex;
+    // signal input mrzBytes[95];
 
     // Hash the TBS certificate bytes and verify RSA signature
     component shaHasher = Sha256Bytes(tbsMaxDataLength);
@@ -52,24 +53,14 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
 	rsa.signature <== DSSignature;
 
     // Extract the public key from the TBS
-    component subArraySelector = SelectSubArray(tbsMaxDataLength, 256);
-    subArraySelector.in <== tbsCertificateBytesPadded;
-    subArraySelector.startIndex <== pkStartIndex;
-    subArraySelector.length <== 256;
+    signal dsPublicKeyBytes[256] <== SelectSubArray(tbsMaxDataLength, 256)(tbsCertificateBytesPadded, pkStartIndex, 256);
 
     // Turn modulus into words array
-    component modulusBytesToWords = ByteArrayToWordArray(256, sod_n, sod_k);
-    modulusBytesToWords.in <== subArraySelector.out;
-
-    signal dsPublicKey[sod_k] <== modulusBytesToWords.out;
+    signal dsPublicKey[sod_k] <== ByteArrayToWordArray(256, sod_n, sod_k)(dsPublicKeyBytes);
 
     // Verify the signature of the document
     // Hash SOD content
-    component sodShaHasher = Sha256Bytes(sodMaxDataLength);
-    sodShaHasher.paddedIn <== SODSignedDataDataPadded;
-    sodShaHasher.paddedInLength <== SODSignedDataDataPaddedLength;
-    signal sodSha[256];
-    sodSha <== sodShaHasher.out;
+    signal sodSha[256] <== Sha256Bytes(sodMaxDataLength)(SODSignedDataPadded, SODSignedDataPaddedLength);
 
     // Verify RSA signature of the SOD
     component sodRsa = RSAVerifier65537(sod_n, sod_k);
@@ -94,6 +85,9 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
 
 	sodRsa.modulus <== dsPublicKey;
 	sodRsa.signature <== SODSignature;
+
+  // Verify the presence of the mrz in the signed data
+
 }
 
 component main { public [CSCApubKey] } = EUVerifier(121, 17, 121, 34, 512, 512 * 2);

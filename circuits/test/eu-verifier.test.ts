@@ -125,7 +125,7 @@ function extractPublicKeyFromTBS(tbsCertificate: ArrayBuffer) {
 }
 
 describe("Verify EU signature", function () {
-  it.only("Verifies that the MRZ hash is part of the signed data", async () => {
+  it("Verifies that the MRZ hash is part of the signed data", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
 
@@ -135,6 +135,8 @@ describe("Verify EU signature", function () {
     const eContentInfo = Buffer.from(
       signedData.encapContentInfo.eContent.getValue()
     ).toString("hex");
+
+    console.log(eContentInfo.length);
 
     const mrzHash = await subtle.digest(
       "SHA-256",
@@ -293,8 +295,8 @@ async function prepareTestData() {
   const index = findPublicKeyIndex(new Uint8Array(tbsCertificate), 0);
 
   const inputs = {
-    SODSignedDataDataPadded: Uint8ArrayToCharArray(SODDataPadded),
-    SODSignedDataDataPaddedLength: SODDataPaddedLen,
+    SODSignedDataPadded: Uint8ArrayToCharArray(SODDataPadded),
+    SODSignedDataPaddedLength: SODDataPaddedLen,
     DSSignature: splitToWords(
       BigInt("0x" + bufferToHex(Buffer.from(dsSignature)).toString()),
       BigInt(121),
@@ -330,7 +332,7 @@ describe("EUVerifier", function () {
     });
   });
 
-  it.skip("should generate witness for circuit with Sha256RSA signature", async () => {
+  it("should generate witness for circuit with Sha256RSA signature", async () => {
     const { inputs } = await prepareTestData();
 
     await circuit.calculateWitness(inputs);
