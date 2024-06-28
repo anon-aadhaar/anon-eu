@@ -3,6 +3,7 @@ pragma circom 2.1.9;
 include "@zk-email/circuits/lib/rsa.circom";
 include "@zk-email/circuits/lib/sha.circom";
 include "@zk-email/circuits/utils/array.circom";
+include "circomlib/circuits/bitify.circom";
 include "./helpers.circom";
 
 template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLength) {
@@ -21,13 +22,11 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
     // Start index of the DS public key in the TBS data
     signal input pkStartIndex;
     signal input mrz[95];
+    signal input eContentInfoBytesPadded[512];
+    signal input eContentInfoBytesPaddedLength;
 
     // Hash the TBS certificate bytes and verify RSA signature
-    component shaHasher = Sha256Bytes(tbsMaxDataLength);
-    shaHasher.paddedIn <== tbsCertificateBytesPadded;
-    shaHasher.paddedInLength <== tbsCertificateBytesPaddedLength;
-    signal sha[256];
-    sha <== shaHasher.out;
+    signal tbsShaHash[256] <== Sha256Bytes(tbsMaxDataLength)(tbsCertificateBytesPadded, tbsCertificateBytesPaddedLength);
 
     component rsa = RSAVerifier65537(csca_n, csca_k);
     var rsaMsgLength = (256 + csca_n) \ csca_n;
@@ -36,7 +35,7 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
       rsaBaseMsg[i] = Bits2Num(csca_n);
     }
     for (var i = 0; i < 256; i++) {
-      rsaBaseMsg[i \ csca_n].in[i % csca_n] <== sha[255 - i];
+      rsaBaseMsg[i \ csca_n].in[i % csca_n] <== tbsShaHash[255 - i];
     }
     for (var i = 256; i < csca_n * rsaMsgLength; i++) {
       rsaBaseMsg[i \ csca_n].in[i % csca_n] <== 0;
@@ -76,12 +75,12 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
       sodRsaBaseMsg[i \ sod_n].in[i % sod_n] <== 0;
     }
 
-    for (var i = 0; i < sodRsaMsgLength; i++) {
-      sodRsa.message[i] <== sodRsaBaseMsg[i].out;
-    }
-    for (var i = sodRsaMsgLength; i < sod_k; i++) {
-      sodRsa.message[i] <== 0;
-    }
+  for (var i = 0; i < sodRsaMsgLength; i++) {
+    sodRsa.message[i] <== sodRsaBaseMsg[i].out;
+  }
+  for (var i = sodRsaMsgLength; i < sod_k; i++) {
+    sodRsa.message[i] <== 0;
+  }
 
 	sodRsa.modulus <== dsPublicKey;
 	sodRsa.signature <== SODSignature;
@@ -89,7 +88,33 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
   // Verify the presence of the mrz in the signed data
   signal mrzShaHash[256] <== Sha256BytesStatic(95)(mrz);
 
-  
+  component mrzShaHashBytes[32];
+  for (var i = 0; i < 32; i++) {
+      mrzShaHashBytes[i] = Bits2Num(8);
+      for (var j = 0; j < 8; j++) {
+        mrzShaHashBytes[i].in[7 - j] <== mrzShaHash[i * 8 + j];
+      }
+  }
+
+  for (var i = 0; i < 32; i++) {
+      eContentInfoBytesPadded[31 + i] === mrzShaHashBytes[i].out;
+  }
+
+  // Verify the presence of the eContent hash in the signed data
+  signal eContentHash[256] <== Sha256Bytes(512)(eContentInfoBytesPadded, eContentInfoBytesPaddedLength);
+
+  component eContentHashBytes[32];
+  for (var i = 0; i < 32; i++) {
+      eContentHashBytes[i] = Bits2Num(8);
+      for (var j = 0; j < 8; j++) {
+        eContentHashBytes[i].in[7 - j] <== eContentHash[i * 8 + j];
+      }
+  }
+
+  var startIndex = 152 - 32; 
+  for (var i = 0; i < 32; i++) {
+    SODSignedDataPadded[startIndex + i] === eContentHashBytes[i].out;
+  }
 }
 
 component main { public [CSCApubKey] } = EUVerifier(121, 17, 121, 34, 512, 512 * 2);

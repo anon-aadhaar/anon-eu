@@ -110,7 +110,7 @@ export const getSignatureData = async (
   const signatureValue =
     signedData.signerInfos[0].signature.valueBlock.valueHexView;
 
-  const eContentInfoBytes = Buffer.from(
+  const eContentInfoBytes = new Uint8Array(
     signedData.encapContentInfo.eContent.getValue()
   );
 
@@ -132,7 +132,7 @@ function extractPublicKeyFromTBS(tbsCertificate: ArrayBuffer) {
 }
 
 describe("Verify EU signature", function () {
-  it("Verifies that the MRZ hash is part of the signed data", async () => {
+  it.only("Verifies that the MRZ hash is part of the signed data", async () => {
     // Parse SOD data to get the signed certificate
     const signedData = await parseSOD(EUSODData);
 
@@ -160,7 +160,7 @@ describe("Verify EU signature", function () {
     if (!signedData.signerInfos[0].signedAttrs)
       throw Error("signedAttrs not found in signed data.");
 
-    const eContentSignedBytes = new Uint8Array(
+    const signedDataBytes = new Uint8Array(
       Buffer.from(signedData.signerInfos[0].signedAttrs.encodedValue)
     );
 
@@ -168,7 +168,7 @@ describe("Verify EU signature", function () {
     const eContentHashBytes = new Uint8Array(eContentHash);
 
     assert.equal(
-      isEqualBuffer(eContentHashBytes, eContentSignedBytes.slice(-32)),
+      isEqualBuffer(eContentHashBytes, signedDataBytes.slice(-32)),
       true
     );
   });
@@ -300,6 +300,10 @@ async function prepareTestData() {
     512
   );
 
+  console.log("Length of signed data: ", new Uint8Array(signedData));
+  console.log("Length of inserted signed data: ", SODDataPadded.slice(152));
+  console.log("Padded length: ", SODDataPaddedLen);
+
   const inputs = {
     SODSignedDataPadded: Uint8ArrayToCharArray(SODDataPadded),
     SODSignedDataPaddedLength: SODDataPaddedLen,
@@ -341,7 +345,7 @@ describe("EUVerifier", function () {
     });
   });
 
-  it("should generate witness for circuit with Sha256RSA signature", async () => {
+  it.only("should generate witness for circuit with Sha256RSA signature", async () => {
     const { inputs } = await prepareTestData();
 
     await circuit.calculateWitness(inputs);
