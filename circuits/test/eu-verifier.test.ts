@@ -11,6 +11,7 @@ import {
 import crypto, { subtle } from "crypto";
 import assert from "assert";
 import {
+  findSubarrayIndices,
   getPublicKey,
   getPublicKeyFromSignedData,
   parseSOD,
@@ -82,6 +83,7 @@ export const getSignatureData = async (
   signature: Uint8Array;
   signedData: ArrayBuffer;
   publicKey: CryptoKey;
+  eContentInfoBytes: Uint8Array;
 }> => {
   const signedData = await parseSOD(sodData);
 
@@ -108,10 +110,15 @@ export const getSignatureData = async (
   const signatureValue =
     signedData.signerInfos[0].signature.valueBlock.valueHexView;
 
+  const eContentInfoBytes = Buffer.from(
+    signedData.encapContentInfo.eContent.getValue()
+  );
+
   return {
     signature: signatureValue,
     signedData: signedDataBuffer,
     publicKey,
+    eContentInfoBytes,
   };
 };
 
@@ -132,42 +139,37 @@ describe("Verify EU signature", function () {
     if (!signedData.encapContentInfo.eContent)
       throw Error("eContent not found in signed data.");
 
-    const eContentInfo = Buffer.from(
-      signedData.encapContentInfo.eContent.getValue()
-    ).toString("hex");
-
-    console.log(eContentInfo.length);
+    const eContentInfoBytes = new Uint8Array(
+      Buffer.from(signedData.encapContentInfo.eContent.getValue())
+    );
 
     const mrzHash = await subtle.digest(
       "SHA-256",
       Buffer.from(base64Mrz, "base64")
     );
 
+    const mrzHashBytes = new Uint8Array(mrzHash);
+
+    const { start, end } = findSubarrayIndices(eContentInfoBytes, mrzHashBytes);
+
     assert.equal(
-      Buffer.from(mrzHash).toString("hex"),
-      eContentInfo.substring(62, 62 + 64)
+      isEqualBuffer(mrzHash, eContentInfoBytes.subarray(start, end)),
+      true
     );
 
     if (!signedData.signerInfos[0].signedAttrs)
       throw Error("signedAttrs not found in signed data.");
 
-    const eContentSignedDataBuffer = Buffer.from(
-      signedData.signerInfos[0].signedAttrs.encodedValue
+    const eContentSignedBytes = new Uint8Array(
+      Buffer.from(signedData.signerInfos[0].signedAttrs.encodedValue)
     );
 
-    const eContentHash = await subtle.digest(
-      "SHA-256",
-      Buffer.from(eContentInfo, "hex")
-    );
-
-    const eContentSignedDataString = eContentSignedDataBuffer.toString("hex");
+    const eContentHash = await subtle.digest("SHA-256", eContentInfoBytes);
+    const eContentHashBytes = new Uint8Array(eContentHash);
 
     assert.equal(
-      Buffer.from(eContentHash).toString("hex"),
-      eContentSignedDataString.slice(
-        eContentSignedDataString.length - 64,
-        eContentSignedDataString.length
-      )
+      isEqualBuffer(eContentHashBytes, eContentSignedBytes.slice(-32)),
+      true
     );
   });
 
@@ -276,9 +278,8 @@ describe("Verify EU signature", function () {
 });
 
 async function prepareTestData() {
-  const { signature, signedData, publicKey } = await getSignatureData(
-    EUSODData
-  );
+  const { signature, signedData, publicKey, eContentInfoBytes } =
+    await getSignatureData(EUSODData);
 
   const { tbsCertificate, CSCApublicKey, dsSignature } = await getCSCApublicKey(
     EUSODData
@@ -293,6 +294,11 @@ async function prepareTestData() {
     sha256Pad(new Uint8Array(tbsCertificate), 512 * 2);
 
   const index = findPublicKeyIndex(new Uint8Array(tbsCertificate), 0);
+
+  const [eContentInfoBytesPadded, eContentInfoBytesPaddedLength] = sha256Pad(
+    new Uint8Array(eContentInfoBytes),
+    512
+  );
 
   const inputs = {
     SODSignedDataPadded: Uint8ArrayToCharArray(SODDataPadded),
@@ -310,6 +316,9 @@ async function prepareTestData() {
     CSCApubKey: splitToWords(CSCApublicKey, BigInt(121), BigInt(34)),
     tbsCertificateBytesPadded: Uint8ArrayToCharArray(tbsCertificateBytesPadded),
     tbsCertificateBytesPaddedLength: tbsCertificateBytesPaddedLength,
+    mrz: Uint8ArrayToCharArray(Buffer.from(base64Mrz, "base64")),
+    eContentInfoBytesPadded: Uint8ArrayToCharArray(eContentInfoBytesPadded),
+    eContentInfoBytesPaddedLength: eContentInfoBytesPaddedLength,
     pkStartIndex: index + 7,
   };
 

@@ -20,7 +20,7 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
     signal input SODSignature[sod_k];
     // Start index of the DS public key in the TBS data
     signal input pkStartIndex;
-    // signal input mrzBytes[95];
+    signal input mrz[95];
 
     // Hash the TBS certificate bytes and verify RSA signature
     component shaHasher = Sha256Bytes(tbsMaxDataLength);
@@ -49,8 +49,8 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
       rsa.message[i] <== 0;
     }
 
-	rsa.modulus <== CSCApubKey;
-	rsa.signature <== DSSignature;
+	  rsa.modulus <== CSCApubKey;
+	  rsa.signature <== DSSignature;
 
     // Extract the public key from the TBS
     signal dsPublicKeyBytes[256] <== SelectSubArray(tbsMaxDataLength, 256)(tbsCertificateBytesPadded, pkStartIndex, 256);
@@ -87,7 +87,9 @@ template EUVerifier(sod_n, sod_k, csca_n, csca_k, sodMaxDataLength, tbsMaxDataLe
 	sodRsa.signature <== SODSignature;
 
   // Verify the presence of the mrz in the signed data
+  signal mrzShaHash[256] <== Sha256BytesStatic(95)(mrz);
 
+  
 }
 
 component main { public [CSCApubKey] } = EUVerifier(121, 17, 121, 34, 512, 512 * 2);

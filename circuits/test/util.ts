@@ -84,3 +84,24 @@ export function getPublicKeyFromSignedData(
     ["verify"]
   );
 }
+
+export function findSubarrayIndices(
+  mainArray: Uint8Array,
+  subArray: Uint8Array
+) {
+  const mainLength = mainArray.length;
+  const subLength = subArray.length;
+
+  for (let i = 0; i <= mainLength - subLength; i++) {
+    let j;
+    for (j = 0; j < subLength; j++) {
+      if (mainArray[i + j] !== subArray[j]) {
+        break;
+      }
+    }
+    if (j === subLength) {
+      return { start: i, end: i + subLength };
+    }
+  }
+  return { start: -1, end: -1 }; // not found
+}
